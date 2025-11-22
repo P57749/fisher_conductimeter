@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Guía de Calibración y Uso – Instrumento EC (Atlas EZO EC + Arduino Uno)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.5; color: #222; padding: 24px; max-width: 860px; margin: auto; }
+    h1, h2 { margin: 0.6em 0 0.3em; }
+    code, kbd { background: #f4f4f4; padding: 0 4px; border-radius: 4px; }
+    pre { background: #f7f7f9; padding: 12px; overflow: auto; border-radius: 6px; }
+    ul { margin: 0.4em 0 0.8em 1.2em; }
+    .note { background: #fff8e1; border: 1px solid #ffe082; padding: 10px 12px; border-radius: 6px; }
+    .warn { background: #ffebee; border: 1px solid #ffcdd2; padding: 10px 12px; border-radius: 6px; }
+  </style>
+  <meta name="author" content="Proyecto fisher_scientifc">
+  <meta name="description" content="Advertencias, métodos de calibración, instrucciones de medición y comandos para operar el instrumento de conductividad con Arduino Uno y módulo Atlas EZO EC.">
+</head>
+<body>
+
+<h1>Guía de Calibración y Uso<br>Instrumento EC (Atlas Scientific EZO EC + Arduino Uno)</h1>
+
+<p>Este documento describe advertencias, métodos de calibración, preparación antes de medir, lista de comandos y detalles de conexión para operar el instrumento de conductividad eléctrica (EC) con <code>Arduino Uno</code> y el circuito <code>EZO EC</code> de Atlas Scientific, tal como está configurado en este proyecto.</p>
+
+<h2>Advertencias y buenas prácticas</h2>
+<ul>
+  <li>Calibrar siempre con <strong>soluciones patrón</strong> trazables (p. ej., <em>84 µS/cm</em>, <em>1413 µS/cm</em>, <em>12.88 mS/cm</em> = <em>12880 µS/cm</em>).</li>
+  <li>La <strong>temperatura</strong> afecta la EC; <strong>fija la compensación</strong> con <code>t &lt;C&gt;</code> (ej. <code>t 25.0</code>) antes de cada punto.</li>
+  <li><strong>Enjuaga</strong> el electrodo entre soluciones (agua destilada) y evita burbujas en el cuerpo del sensor.</li>
+  <li>Espera a que la lectura se <strong>estabilice</strong> antes de ejecutar comandos de calibración.</li>
+  <li>Evita contaminación cruzada, golpes y temperaturas extremas; guarda los patrones bien cerrados y a temperatura recomendada.</li>
+  <li>Si ves <code>*ER</code> tras <code>Cal,...</code> la lectura actual no coincide con el rango del punto; revisa solución y temperatura.</li>
+  <li>Comprueba la <strong>constante de celda K</strong> del electrodo: 0.1 / 1.0 / 10.0. Usa <code>k ?</code> / <code>k 1.0</code>.</li>
+</ul>
+
+<h2>Por qué NO calibrar con agua cualquiera ni fijar valores arbitrarios</h2>
+<ul>
+  <li><strong>Trazabilidad:</strong> calibrar es ajustar el instrumento contra <em>valores de referencia</em> conocidos. El agua “cualquiera” no es un patrón trazable; fijar un valor arbitrario rompe la trazabilidad metrológica y no garantiza repetibilidad.</li>
+  <li><strong>Composición iónica:</strong> las soluciones patrón tienen composición y conductividad conocidas. Aguas reales varían en iones y temperatura; calibrar con ellas introduce sesgos específicos de esa muestra que no se trasladan a otras condiciones.</li>
+  <li><strong>Modelo del EZO EC:</strong> el circuito utiliza puntos <em>low/mid/high</em> para ajustar <em>offset</em> y <em>pendiente</em> de la sonda (incluida la <code>K</code>). Forzar un valor fuera del rango o con lectura inestable produce <code>*ER</code> o una calibración incorrecta.</li>
+  <li><strong>Compensación térmica:</strong> la EC depende de la temperatura. Si no estableces <code>t &lt;C&gt;</code> adecuada durante la calibración, el ajuste queda sesgado y las mediciones posteriores serán erróneas.</li>
+  <li><strong>Linealidad y cobertura:</strong> los puntos patrón cubren el rango operativo y mejoran la linealidad. “Fijar” a un único valor en agua desconocida puede hacer que otras regiones del rango queden con error elevado.</li>
+  <li><strong>Buenas prácticas:</strong> usa soluciones certificadas, controla el entorno (temperatura, vibraciones, contaminación), documenta el procedimiento y realiza verificaciones internas con un equipo patrón, tal como recomiendan guías de metrología.</li>
+</ul>
+
+<h2>Métodos de calibración (EZO EC)</h2>
+<ul>
+  <li><strong>Secuencia típica (1–3 puntos):</strong>
+    <ul>
+      <li><code>cal clear</code> – borra calibración previa.</li>
+      <li><code>cal dry</code> – punto en seco (electrodo al aire).</li>
+      <li><code>cal low 84.0</code> – solución baja (84 µS/cm).</li>
+      <li><code>cal mid 1413</code> – solución media (1413 µS/cm).</li>
+      <li><code>cal high 12880</code> – solución alta (12.88 mS/cm).</li>
+      <li><code>cal ?</code> – verifica el estado de calibración.</li>
+    </ul>
+  </li>
+  <li><strong>Atajo calibración por valor:</strong> <code>cal &lt;µS/cm&gt;</code> selecciona el punto según magnitud:
+    <ul>
+      <li>≤ 200 µS/cm → <code>Cal,low,&lt;v&gt;</code></li>
+      <li>200–3000 µS/cm → <code>Cal,mid,&lt;v&gt;</code></li>
+      <li>&gt; 3000 µS/cm → <code>Cal,high,&lt;v&gt;</code></li>
+    </ul>
+  </li>
+  <li><strong>Compensación de temperatura:</strong>
+    <ul>
+      <li><code>t &lt;C&gt;</code> – fija compensación (ej. <code>t 25.0</code>).</li>
+      <li><code>t ?</code> – consulta la compensación actual.</li>
+    </ul>
+  </li>
+  <li><strong>Constante de celda (K):</strong>
+    <ul>
+      <li><code>k ?</code> – consulta la K vigente.</li>
+      <li><code>k 0.1</code> / <code>k 1.0</code> / <code>k 10.0</code> – fija K según tu sonda.</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>Indicaciones antes de medir</h2>
+<ul>
+  <li>Define <strong>temperatura</strong> con <code>t &lt;C&gt;</code> basándote en una medición real (RTD/DS18B20, etc.).</li>
+  <li>Enjuaga el electrodo y sécalo según recomendaciones del fabricante.</li>
+  <li>Evita burbujas y toca suavemente el electrodo para liberar aire atrapado.</li>
+  <li>Espera estabilidad (varios segundos) y usa <code>r</code> o activa <code>stream on</code>.</li>
+  <li>Para aguas muy puras, espera lecturas cercanas a 0; esto es normal.</li>
+</ul>
+
+<h2>Lista de comandos (firmware del proyecto)</h2>
+<ul>
+  <li><code>help</code> – muestra esta ayuda resumida.</li>
+  <li><code>r</code> – lectura inmediata del EZO.</li>
+  <li><code>stream on|off</code> – activa/desactiva lecturas periódicas.</li>
+  <li><code>period &lt;ms&gt;</code> – periodo de lectura (por defecto 1000).</li>
+  <li><code>raw on|off</code> – muestra/oculta respuesta cruda del EZO.</li>
+  <li><code>t &lt;C&gt;</code> / <code>t ?</code> – fija/consulta compensación de temperatura.</li>
+  <li><code>cal clear</code> / <code>cal dry</code> / <code>cal low|mid|high &lt;µS/cm&gt;</code> / <code>cal ?</code>.</li>
+  <li><code>cal &lt;µS/cm&gt;</code> – atajo que elige low/mid/high por magnitud.</li>
+  <li><code>o ec|tds|sal|sg on|off</code> – salidas etiquetadas del EZO.</li>
+  <li><code>o ?</code> – consulta del estado actual de las salidas etiquetadas.</li>
+  <li><code>k ?</code> / <code>k 0.1|1.0|10.0</code> – consulta/ajusta constante de celda.</li>
+  <li><code>i</code> – información del dispositivo (modelo/firmware).</li>
+  <li><code>status</code> – estado del circuito (diagnóstico).</li>
+  <li><code>led on|off</code> – control del LED del módulo.</li>
+  <li><code>factory</code> – restauración a valores de fábrica (borra calibración/ajustes).</li>
+  <li><code>sleep</code> – modo bajo consumo (salir con reset o reinicio de alimentación).</li>
+  <li><code>c on|off</code> – modo continuo propio del EZO (evitar si se usa <code>stream</code> del firmware).</li>
+</ul>
+
+<div class="warn"><strong>Nota sobre modo continuo (<code>c on</code>):</strong> el EZO puede emitir lecturas de manera autónoma. Si activas el modo continuo, desactiva el <code>stream</code> del firmware para evitar colisiones de comandos y tráfico excesivo. Usa este modo solo para pruebas específicas y vuelve a <code>c off</code> antes de operar con el CLI del proyecto.</div>
+
+<h2>Comunicación y monitor serial</h2>
+<ul>
+  <li><strong>Baudios:</strong> <code>115200</code> para el puerto USB del Arduino (<code>Serial</code>).</li>
+  <li><strong>Terminador:</strong> usa <code>LF</code> o <code>CRLF</code>. Si seleccionas <em>None</em>, el firmware procesa tras ~300 ms de inactividad.</li>
+  <li><strong>Puerto:</strong> selecciona <code>/dev/tty.usbmodemXXXX</code> (macOS). Con clones, puede ser <code>/dev/cu.wchusbserial...</code> (CH340) o <code>/dev/cu.SLAB_USBtoUART</code> (CP210x).</li>
+  <li>PlatformIO: <code>pio device monitor -b 115200 -p &lt;puerto&gt;</code>.</li>
+</ul>
+
+<h2>Cableado y alimentación</h2>
+<ul>
+  <li><strong>Arduino Uno</strong> + <strong>EZO EC</strong> en UART.</li>
+  <li><strong>Pines en firmware:</strong> <code>SoftwareSerial ezoSerial(3, 2)</code> → <code>D3</code> recibe desde <code>EZO TX</code>, <code>D2</code> transmite hacia <code>EZO RX</code>.</li>
+  <li><strong>GND común</strong> entre Arduino y EZO.</li>
+  <li><strong>Alimentación:</strong> verifica especificación del módulo EZO; la interfaz UART del Uno es 5 V TTL.</li>
+  <li>Si tu cableado original usa <code>D2=RX</code> y <code>D3=TX</code>, puedes invertir los cables o ajustar el orden de la instancia <code>SoftwareSerial</code> en código.</li>
+</ul>
+
+<h2>Resolución de problemas</h2>
+<ul>
+  <li><strong>Lecturas 0.00:</strong> agua muy pura, falta compensación de temperatura, sonda sin inmersión correcta o K incorrecta.</li>
+  <li><strong>Respuesta <code>*ER</code>:</strong> la solución presente no coincide con el punto de calibración seleccionado.</li>
+  <li><strong>Textos raros</strong> como <code>0.000.00</code>: revisa RX/TX, velocidad de baudios y ruido en <code>SoftwareSerial</code>.</li>
+  <li><strong>Puertos no aparecen:</strong> revisa cable, adaptador y drivers (CH340/CP210x en clones), y permisos en macOS.</li>
+  <li><strong>Salidas del EZO:</strong> usa <code>o ec on</code>, <code>o tds/sal/sg off</code> para simplificar la respuesta mientras calibras.</li>
+</ul>
+
+<h2>Notas metrológicas</h2>
+<ul>
+  <li>La calibración consiste en comparar la medición con valores <strong>de referencia</strong> y ajustar el instrumento para minimizar error.</li>
+  <li>Realiza <strong>verificaciones internas</strong> periódicas con un equipo patrón y patrones certificados; ajusta la frecuencia según uso y recomendaciones del fabricante.</li>
+  <li>Controla el <strong>entorno</strong>: temperatura estable, ausencia de vibraciones y contaminación; guarda patrones adecuadamente.</li>
+</ul>
+
+
+
+</body>
+</html>
